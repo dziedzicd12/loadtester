@@ -1,0 +1,17 @@
+{
+  "dependencies": {
+    "@msgpack/msgpack": "^3.1.1",
+    "@solana/web3.js": "^1.98.1",
+    "zlib": "^1.0.5"
+  },
+  "name": "stress",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}

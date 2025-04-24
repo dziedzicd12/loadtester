@@ -1,0 +1,26 @@
+[
+  {
+    "keypairPath": "/home/BlackBeard/.config/solana/id.json",
+    "recipient": "3omY12JnfrDigQagmoX9kgRT9eX3QDWz7Mvw18VNdgHc",
+    "label": "Sender1",
+    "assignedRpc": "https://rpc.testnet.x1.xyz"
+  },
+  {
+    "keypairPath": "/home/BlackBeard/.config/solana/identity.json",
+    "recipient": "HcRPCCBqiahmdbHoBaoMYvj4EyGWxzAMbpBhvyQUj5Wc",
+    "label": "Sender2",
+    "assignedRpc": "http://74.50.77.86:8899"
+  },
+  {
+    "keypairPath": "/home/BlackBeard/.config/solana/spare.json",
+    "recipient": "4ocTBVRYkDgaFbWLoGVnhwhe4gYmXcjrFpKsCVaM4r7G",
+    "label": "Sender3",
+    "assignedRpc": "http://66.23.234.2:8899"
+  },
+  {
+    "keypairPath": "/home/BlackBeard/.config/solana/wallet4.json",
+    "recipient": "CrcQZFNxZE928pt6XtScA7kZmpTr6NswhXha5dbAgQ9u",
+    "label": "Sender4",
+    "assignedRpc": "http://206.72.198.218:8899"
+  }
+]
