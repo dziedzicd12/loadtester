@@ -24,14 +24,15 @@ const RPC_ENDPOINTS = [
   'http://212.237.217.29:8899',
   'http://38.58.179.51:8899',
   'http://74.50.77.86:8899',
-  'http://204.13.234.238:8899',  // New RPC
-  'http://64.71.177.151:8899'    // New RPC
+  'http://204.13.234.238:8899',
+  'http://64.71.177.151:8899'
 ].map(url => url.startsWith('http') ? url : `http://${url}`);
 
-const WORKERS_PER_SENDER = 15;
-const BATCH_SIZE = 25;
-const MAX_TPS_TARGET = 2000;
+const WORKERS_PER_SENDER = 25;
+const BATCH_SIZE = 1;
+const MAX_TPS_TARGET = 20000;
 const RATE_LIMIT_DELAY_MS = 8;
+const CHAIN_TPS_INTERVAL = 5000; // Check on-chain TPS every 5 seconds
 
 // ===== PERFORMANCE TRACKING =====
 let stats = {
@@ -39,7 +40,10 @@ let stats = {
   successCount: 0,
   failCount: 0,
   lastReset: Date.now(),
-  rpcUsage: {}
+  rpcUsage: {},
+  chainTps: 0,
+  lastSlot: 0,
+  lastTxCount: 0
 };
 
 // ===== HELPER FUNCTIONS =====
@@ -81,22 +85,62 @@ async function getSenderConfig() {
   return senders;
 }
 
+// ===== CHAIN TPS MONITOR =====
+async function monitorChainTps(connection) {
+  try {
+    // Method 1: Direct from recent performance samples
+    const samples = await connection.getRecentPerformanceSamples(5); // Last 5 samples
+    const latestSample = samples[0];
+    
+    if (latestSample && latestSample.numTransactions) {
+      // Each sample covers ~60 seconds
+      stats.chainTps = (latestSample.numTransactions / 60).toFixed(2);
+      return;
+    }
+
+    // Fallback Method 2: Block-based calculation
+    const block = await connection.getLatestBlockhash();
+    const blockInfo = await connection.getBlock(block.lastValidBlockHeight, {
+      maxSupportedTransactionVersion: 0,
+      transactionDetails: 'none'
+    });
+    
+    if (blockInfo && blockInfo.blockTime && blockInfo.previousBlockhash) {
+      const prevBlock = await connection.getBlock(blockInfo.previousBlockhash, {
+        maxSupportedTransactionVersion: 0,
+        transactionDetails: 'none'
+      });
+      
+      if (prevBlock && prevBlock.blockTime) {
+        const timeDiff = blockInfo.blockTime - prevBlock.blockTime;
+        const txsInBlock = blockInfo.transactions?.length || 0;
+        stats.chainTps = timeDiff > 0 ? (txsInBlock / timeDiff).toFixed(2) : "N/A";
+      }
+    }
+  } catch (err) {
+    console.error('Chain TPS monitoring error:', err.message);
+    stats.chainTps = "Error";
+  }
+}
+
 // ===== STATS LOGGER =====
 function logStats() {
   const elapsedSec = (Date.now() - stats.lastReset) / 1000;
-  const tps = ((stats.successCount * BATCH_SIZE) / elapsedSec).toFixed(2);
+  const ourTps = ((stats.successCount * BATCH_SIZE) / elapsedSec).toFixed(2);
   
   console.log(`
-=== MAX-TPS METRICS ===
-TPS: ${tps} (${stats.successCount * BATCH_SIZE} TXs in ${elapsedSec}s)
+=== PERFORMANCE METRICS ===
+Our TPS: ${ourTps} (${stats.successCount * BATCH_SIZE} TXs in ${elapsedSec}s)
+Chain TPS: ${stats.chainTps} (observed)
 Success Rate: ${(stats.successCount / (stats.successCount + stats.failCount) * 100).toFixed(2)}%
 Failures: ${stats.failCount}
 
-RPC Performance:
-${Object.entries(stats.rpcUsage).sort((a,b) => b[1]-a[1]).slice(0,5).map(([rpc, count]) => 
-  `• ${rpc}: ${count} TXs`).join('\n')}
-...showing top 5 of ${Object.keys(stats.rpcUsage).length} RPCs
-========================
+Top RPCs by Volume:
+${Object.entries(stats.rpcUsage)
+  .sort((a,b) => b[1]-a[1])
+  .slice(0,5)
+  .map(([rpc, count]) => `• ${rpc}: ${count} TXs`).join('\n')}
+==========================
 `);
 
   stats.successCount = stats.failCount = 0;
@@ -110,12 +154,15 @@ if (isMainThread) {
     const SENDERS = await getSenderConfig();
     console.log(`?? Launching ${SENDERS.length * WORKERS_PER_SENDER} workers across ${RPC_ENDPOINTS.length} RPCs`);
 
+    // Create monitoring connection
+    const monitorConnection = new Connection(RPC_ENDPOINTS[0], 'confirmed');
+    setInterval(() => monitorChainTps(monitorConnection), CHAIN_TPS_INTERVAL);
+
     // Calculate optimal distribution
     const totalWorkers = SENDERS.length * WORKERS_PER_SENDER;
     const workersPerRpc = Math.floor(totalWorkers / RPC_ENDPOINTS.length);
     let remainder = totalWorkers % RPC_ENDPOINTS.length;
 
-    // Create assignment list
     const rpcAssignments = [];
     RPC_ENDPOINTS.forEach(rpc => {
       const count = workersPerRpc + (remainder-- > 0 ? 1 : 0);
@@ -198,10 +245,9 @@ if (isMainThread) {
     const switchRpc = () => {
       const originalIndex = currentRpcIndex;
       let attempts = 0;
-      const maxAttempts = allRpcEndpoints.length * 2; // Allow full cycle twice
+      const maxAttempts = allRpcEndpoints.length * 2;
       
       do {
-        // Prefer moving forward through the list
         currentRpcIndex = (currentRpcIndex + 1) % allRpcEndpoints.length;
         connection = new Connection(allRpcEndpoints[currentRpcIndex], {
           commitment: 'confirmed',
