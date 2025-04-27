@@ -41,7 +41,7 @@ Create or modify `sender_config.json` to configure your test parameters:
 
 ### Sender Accounts Configuration
 
-The first time you run the script, it will prompt you to create `sender_config.json` with:
+The first time you run the script, it will prompt you enter the paths to four funded wallet to create `sender_config.json`:
 
 ```json
 [
