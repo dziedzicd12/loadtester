@@ -15,24 +15,24 @@ const os = require('os');
 
 // ===== CONFIGURATION =====
 const CONFIG_PATH = './sender_config.json';
-const RPC_ENDPOINTS = [
-  'https://rpc.testnet.x1.xyz',
+const WORKERS_PER_SENDER = 15;
+const BATCH_SIZE = 30;
+const MAX_TPS_TARGET = 4000;
+const RATE_LIMIT_DELAY_MS = 7;
+const CHAIN_TPS_INTERVAL = 10000;
+const GOSSIP_REFRESH_INTERVAL = 300000;
+
+// Fixed endpoints
+const X1_TESTNET_RPC = 'https://rpc.testnet.x1.xyz';
+const FALLBACK_ENDPOINTS = [
+  X1_TESTNET_RPC,
   'http://173.249.26.21:8899',
   'http://68.168.213.6:8899',
   'http://173.214.172.170:8899',
   'http://74.50.76.178:8899',
   'http://65.109.112.35:8899',
-  'http://65.108.134.100:8899',
-  'http://74.50.77.86:8899',
-  'http://66.23.234.2:8899',
-  'http://74.50.76.62:8899'
-].map(url => url.startsWith('http') ? url : `http://${url}`);
-
-const WORKERS_PER_SENDER = 15;
-const BATCH_SIZE = 30;
-const MAX_TPS_TARGET = 4000;
-const RATE_LIMIT_DELAY_MS = 5;
-const CHAIN_TPS_INTERVAL = 10000; // Check on-chain TPS every 10 seconds
+  'http://65.108.134.100:8899'
+];
 
 // ===== PERFORMANCE TRACKING =====
 let stats = {
@@ -45,6 +45,8 @@ let stats = {
   lastSlot: 0,
   lastTxCount: 0
 };
+
+let RPC_ENDPOINTS = [...FALLBACK_ENDPOINTS];
 
 // ===== HELPER FUNCTIONS =====
 function expandPath(filepath) {
@@ -85,20 +87,53 @@ async function getSenderConfig() {
   return senders;
 }
 
+// ===== RPC DISCOVERY =====
+async function discoverX1RpcEndpoints() {
+  try {
+    const bootstrapConnection = new Connection(X1_TESTNET_RPC);
+    const nodes = await bootstrapConnection.getClusterNodes();
+    
+    const rpcNodes = nodes.filter(node => {
+      const hasGossip = node.gossip && node.gossip.includes(':');
+      const hasRpc = node.rpc && node.rpc.includes(':');
+      return hasGossip && hasRpc;
+    });
+    
+    let endpoints = rpcNodes.map(node => {
+      const [host, port] = node.rpc.split(':');
+      return `http://${host}:${port}`;
+    });
+    
+    endpoints = endpoints.filter(url => url.startsWith('http'));
+    endpoints = shuffleArray(endpoints);
+    
+    const randomEndpoints = [...new Set(endpoints)].slice(0, 9);
+    return [X1_TESTNET_RPC, ...randomEndpoints];
+  } catch (error) {
+    console.error('Failed to discover RPC endpoints from X1 gossip:', error.message);
+    return FALLBACK_ENDPOINTS;
+  }
+}
+
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
 // ===== CHAIN TPS MONITOR =====
 async function monitorChainTps(connection) {
   try {
-    // Method 1: Direct from recent performance samples
-    const samples = await connection.getRecentPerformanceSamples(5); // Last 5 samples
+    const samples = await connection.getRecentPerformanceSamples(5);
     const latestSample = samples[0];
     
     if (latestSample && latestSample.numTransactions) {
-      // Each sample covers ~60 seconds
       stats.chainTps = (latestSample.numTransactions / 60).toFixed(2);
       return;
     }
 
-    // Fallback Method 2: Block-based calculation
     const block = await connection.getLatestBlockhash();
     const blockInfo = await connection.getBlock(block.lastValidBlockHeight, {
       maxSupportedTransactionVersion: 0,
@@ -151,31 +186,30 @@ ${Object.entries(stats.rpcUsage)
 // ===== MAIN THREAD =====
 if (isMainThread) {
   (async () => {
+    RPC_ENDPOINTS = await discoverX1RpcEndpoints();
+    
     const SENDERS = await getSenderConfig();
-    console.log(`?? Launching ${SENDERS.length * WORKERS_PER_SENDER} workers across ${RPC_ENDPOINTS.length} RPCs`);
+    console.log(`Launching ${SENDERS.length * WORKERS_PER_SENDER} workers`);
 
-    // Create monitoring connection
-    const monitorConnection = new Connection(RPC_ENDPOINTS[0], 'confirmed');
-    setInterval(() => monitorChainTps(monitorConnection), CHAIN_TPS_INTERVAL);
+    // Worker distribution function
+    const distributeWorkers = () => {
+      const totalWorkers = SENDERS.length * WORKERS_PER_SENDER;
+      const workersPerRpc = Math.floor(totalWorkers / RPC_ENDPOINTS.length);
+      let remainder = totalWorkers % RPC_ENDPOINTS.length;
 
-    // Calculate optimal distribution
-    const totalWorkers = SENDERS.length * WORKERS_PER_SENDER;
-    const workersPerRpc = Math.floor(totalWorkers / RPC_ENDPOINTS.length);
-    let remainder = totalWorkers % RPC_ENDPOINTS.length;
+      const rpcAssignments = [];
+      RPC_ENDPOINTS.forEach(rpc => {
+        const count = workersPerRpc + (remainder-- > 0 ? 1 : 0);
+        rpcAssignments.push(...Array(count).fill(rpc));
+      });
 
-    const rpcAssignments = [];
-    RPC_ENDPOINTS.forEach(rpc => {
-      const count = workersPerRpc + (remainder-- > 0 ? 1 : 0);
-      rpcAssignments.push(...Array(count).fill(rpc));
-    });
+      return shuffleArray(rpcAssignments);
+    };
 
-    // Shuffle for better initial distribution
-    for (let i = rpcAssignments.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [rpcAssignments[i], rpcAssignments[j]] = [rpcAssignments[j], rpcAssignments[i]];
-    }
+    let rpcAssignments = distributeWorkers();
 
-    console.log("\n?? RPC Worker Distribution:");
+    // Show initial worker distribution with full URLs
+    console.log("\nInitial Worker Distribution:");
     const distributionSummary = {};
     rpcAssignments.forEach(rpc => {
       distributionSummary[rpc] = (distributionSummary[rpc] || 0) + 1;
@@ -183,12 +217,16 @@ if (isMainThread) {
     console.table(Object.entries(distributionSummary).map(([rpc, count]) => ({
       RPC: rpc,
       Workers: count,
-      'Percentage': `${((count / totalWorkers) * 100).toFixed(1)}%`
+      'Percentage': `${((count / rpcAssignments.length) * 100).toFixed(1)}%`
     })));
 
+    const monitorConnection = new Connection(X1_TESTNET_RPC, 'confirmed');
+    setInterval(() => monitorChainTps(monitorConnection), CHAIN_TPS_INTERVAL);
     setInterval(logStats, 10000);
 
     let workerCounter = 0;
+    const workers = [];
+    
     SENDERS.forEach(sender => {
       for (let i = 0; i < WORKERS_PER_SENDER; i++) {
         const assignedRpc = rpcAssignments[workerCounter % rpcAssignments.length];
@@ -214,8 +252,20 @@ if (isMainThread) {
           }
           stats.totalBatches++;
         });
+
+        workers.push(worker);
       }
     });
+
+    // Silent RPC refresh
+    setInterval(async () => {
+      try {
+        await discoverX1RpcEndpoints();
+      } catch (e) {
+        // Failures are handled by individual workers
+      }
+    }, GOSSIP_REFRESH_INTERVAL);
+
   })();
 
 // ===== WORKER THREADS =====
@@ -241,8 +291,11 @@ if (isMainThread) {
       confirmTransactionInitialTimeout: 120000
     });
 
-    // Enhanced failover with weighted retry
-    const switchRpc = () => {
+    let consecutiveFailures = 0;
+    const MAX_CONSECUTIVE_FAILURES = 5;
+    const BASE_BACKOFF_MS = 1000;
+
+    const switchRpc = async () => {
       const originalIndex = currentRpcIndex;
       let attempts = 0;
       const maxAttempts = allRpcEndpoints.length * 2;
@@ -255,9 +308,21 @@ if (isMainThread) {
         });
         attempts++;
         
+        try {
+          await connection.getLatestBlockhash();
+          consecutiveFailures = 0;
+          return true;
+        } catch (testError) {
+          // Silent fail for testing RPCs
+        }
+        
         if (attempts >= maxAttempts) {
-          console.error('Critical: All RPCs failing. Waiting 10s...');
-          currentRpcIndex = originalIndex;
+          const backoffTime = Math.min(
+            BASE_BACKOFF_MS * Math.pow(2, consecutiveFailures),
+            30000
+          );
+          consecutiveFailures = Math.min(consecutiveFailures + 1, MAX_CONSECUTIVE_FAILURES);
+          await new Promise(resolve => setTimeout(resolve, backoffTime));
           return false;
         }
       } while (currentRpcIndex === originalIndex);
@@ -267,19 +332,17 @@ if (isMainThread) {
 
     while (true) {
       try {
-        // 1. Get latest blockhash
         let blockhash;
         try {
           ({ blockhash } = await connection.getLatestBlockhash());
+          consecutiveFailures = 0;
         } catch (err) {
-          if (!switchRpc()) {
-            await new Promise(resolve => setTimeout(resolve, 10000));
+          if (!await switchRpc()) {
             continue;
           }
           continue;
         }
 
-        // 2. Prepare batch TX
         const tx = new Transaction({ recentBlockhash: blockhash, feePayer: keypair.publicKey });
         for (let i = 0; i < batchSize; i++) {
           tx.add(
@@ -291,7 +354,6 @@ if (isMainThread) {
           );
         }
 
-        // 3. Sign & Send
         tx.sign(keypair);
         const rpcUsed = allRpcEndpoints[currentRpcIndex];
         
@@ -306,7 +368,6 @@ if (isMainThread) {
             switchRpc();
           });
 
-        // 4. Rate limiting
         await new Promise(resolve => setTimeout(resolve, rateLimitDelay));
 
       } catch (err) {
