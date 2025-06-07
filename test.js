@@ -20,19 +20,24 @@ const RPC_ENDPOINTS = [
   'http://173.249.26.21:8899',
   'http://68.168.213.6:8899',
   'http://173.214.172.170:8899',
-  'http://74.50.76.178:8899',
+  'http://194.50.156.179:8899',
+  'http://38.129.136.5:8899',
   'http://65.109.112.35:8899',
   'http://65.108.134.100:8899',
+  'http://213.136.83.43:8899',
   'http://74.50.77.86:8899',
-  'http://66.23.234.2:8899',
-  'http://74.50.76.62:8899'
+  'http://149.86.227.119:8899',
+  'http://74.50.76.62:8899',
+  'http://152.53.33.214:8899',
+  'http://74.50.76.2:8899',
+  'http://149.86.227.119:8899'
 ].map(url => url.startsWith('http') ? url : `http://${url}`);
 
 const WORKERS_PER_SENDER = 15;
-const BATCH_SIZE = 30;
-const MAX_TPS_TARGET = 4000;
-const RATE_LIMIT_DELAY_MS = 5;
-const CHAIN_TPS_INTERVAL = 10000; // Check on-chain TPS every 10 seconds
+const BATCH_SIZE = 35;
+const MAX_TPS_TARGET = 8000;
+const RATE_LIMIT_DELAY_MS = 0;
+const CHAIN_TPS_INTERVAL = 300000; // Check on-chain TPS every 10 seconds
 
 // ===== PERFORMANCE TRACKING =====
 let stats = {

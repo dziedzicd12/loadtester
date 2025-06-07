@@ -16,9 +16,9 @@ const os = require('os');
 // ===== CONFIGURATION =====
 const CONFIG_PATH = './sender_config.json';
 const WORKERS_PER_SENDER = 15;
-const BATCH_SIZE = 30;
-const MAX_TPS_TARGET = 4000;
-const RATE_LIMIT_DELAY_MS = 7;
+const BATCH_SIZE = 35;
+const MAX_TPS_TARGET = 7000;
+const RATE_LIMIT_DELAY_MS = 0;
 const CHAIN_TPS_INTERVAL = 10000;
 const GOSSIP_REFRESH_INTERVAL = 300000;
 
