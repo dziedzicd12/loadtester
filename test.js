@@ -34,7 +34,7 @@ const RPC_ENDPOINTS = [
 ].map(url => url.startsWith('http') ? url : `http://${url}`);
 
 const WORKERS_PER_SENDER = 15;
-const BATCH_SIZE = 35;
+const BATCH_SIZE = 30;
 const MAX_TPS_TARGET = 8000;
 const RATE_LIMIT_DELAY_MS = 0;
 const CHAIN_TPS_INTERVAL = 300000; // Check on-chain TPS every 10 seconds
