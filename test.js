@@ -17,6 +17,7 @@ const os = require('os');
 const CONFIG_PATH = './sender_config.json';
 const RPC_ENDPOINTS = [
   'https://rpc.testnet.x1.xyz',
+  'http://38.129.136.5:8899',
   'http://173.249.26.21:8899',
   'http://68.168.213.6:8899',
   'http://173.214.172.170:8899',
