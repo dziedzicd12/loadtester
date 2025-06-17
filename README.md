@@ -1,4 +1,4 @@
-# X1 Load Tester (`test.js`)
+# X1 Load Tester - The SkySplitter
 
 A high-performance Solana transaction load testing tool designed to stress test RPC endpoints and measure network throughput.
 
