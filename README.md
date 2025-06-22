@@ -1,6 +1,6 @@
 # X1 Load Tester - The SkySplitter
 
-A high-performance Solana transaction load testing tool designed to stress test RPC endpoints and measure network throughput.
+A high-performance X1 transaction load testing tool designed to stress test RPC endpoints and measure network throughput.
 
 ## Features
 
