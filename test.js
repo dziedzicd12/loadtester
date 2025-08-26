@@ -27,7 +27,6 @@ const RPC_ENDPOINTS = [
   'http://74.50.76.62:8899',
   'http://74.50.77.86:8899',
   'http://owlnet.dev:8000',
-  'http://rpc-testnet.x1.wiki:8899',
   'http://38.129.136.5:8899'
 ].map(url => url.startsWith('http') ? url : `http://${url}`);
 
