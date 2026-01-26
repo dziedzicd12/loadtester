@@ -21,13 +21,10 @@ const RPC_ENDPOINTS = [
   'http://194.50.156.179:8899',
   'http://65.108.134.100:8899',
   'http://65.109.112.35:8899',
-  'http://173.214.172.170:8899',
   'http://74.50.76.2:8899',
   'http://68.168.213.6:8899',
   'http://74.50.76.62:8899',
   'http://74.50.77.86:8899',
-  'http://owlnet.dev:8000',
-  'http://38.129.136.5:8899'
 ].map(url => url.startsWith('http') ? url : `http://${url}`);
 
 const WORKERS_PER_SENDER = 10;
