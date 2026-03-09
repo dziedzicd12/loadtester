@@ -56,9 +56,9 @@ const RPC_ENDPOINTS = [
 
 const WORKERS_PER_SENDER = 8;
 const BATCH_SIZE = 2;
-const MAX_TPS_TARGET = 300;
+const MAX_TPS_TARGET = 1000;
 const RATE_LIMIT_DELAY_MS = 0;
-const CHAIN_TPS_INTERVAL = 300; // Check on-chain TPS every 10 seconds
+const CHAIN_TPS_INTERVAL = 2000; // Check on-chain TPS every 10 seconds
 
 // ===== PERFORMANCE TRACKING =====
 let stats = {
