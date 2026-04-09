@@ -54,8 +54,8 @@ const RPC_ENDPOINTS = [
   'http://204.13.232.66:8899',
 ].map(url => url.startsWith('http') ? url : `http://${url}`);
 
-const WORKERS_PER_SENDER = 5;
-const BATCH_SIZE = 2;
+const WORKERS_PER_SENDER = 7;
+const BATCH_SIZE = 3;
 const MAX_TPS_TARGET = 800;
 const RATE_LIMIT_DELAY_MS = 0;
 const CHAIN_TPS_INTERVAL = 3000; // Check on-chain TPS every 10 seconds
